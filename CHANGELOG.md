@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.2](https://github.com/andreglegg/three-first-person-controller/compare/v0.1.1...v0.1.2) (2025-11-19)
+
+
+### Features
+
+* expand controller API and demo]} ([7b203c4](https://github.com/andreglegg/three-first-person-controller/commit/7b203c4e535b91e5a7f16d9dbe8b8948551650de))
+
 ### 0.1.1 (2025-11-19)
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "three-first-person-controller",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lightweight first-person controller for Three.js scenes with pointer lock controls and smooth movement.",
   "author": {
     "name": "Andre Glegg"
