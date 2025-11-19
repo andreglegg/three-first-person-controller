@@ -107,7 +107,7 @@ The source is organized with explicit layers so you can extend or replace pieces
 - `npm run release` uses `standard-version` to bump package versions and update `CHANGELOG.md`.
 - `npm run setup:hooks` installs the Husky git hooks (pre-commit runs lint + test).
 - `npm publish --access public` (after running `npm run build`) will distribute the package to the npm registry.
-- To cut an automated release, trigger the `Release` GitHub workflow (it runs lint/test/build and `npm run release`, then pushes the new tag for you).
+- To cut an automated release, trigger the `Release` GitHub workflow (it runs lint/test/build and `npm run release`, then pushes the new tag for you). Publishing to npm can also be fully automated by configuring a repo secret named `NPM_TOKEN`; the `Publish` workflow runs automatically whenever a GitHub Release is published.
 
 ## Contributing
 
