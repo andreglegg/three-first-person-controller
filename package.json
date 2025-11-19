@@ -29,7 +29,7 @@
     "format": "prettier --write .",
     "setup:hooks": "husky install",
     "release": "standard-version",
-    "prepare": "npm run build"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "three",

@@ -31,27 +31,51 @@ scene.fog = new THREE.Fog(TEST_COLORS.background, 40, 140);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
 
+const hudElements = {
+  fps: document.querySelector<HTMLElement>("[data-hud-fps]"),
+  speed: document.querySelector<HTMLElement>("[data-hud-speed]"),
+  grounded: document.querySelector<HTMLElement>("[data-hud-grounded]"),
+  yaw: document.querySelector<HTMLElement>("[data-hud-yaw]"),
+  pitch: document.querySelector<HTMLElement>("[data-hud-pitch]"),
+  pointerLock: document.querySelector<HTMLElement>("[data-hud-pointer]"),
+};
+
+if (
+  !hudElements.fps ||
+  !hudElements.speed ||
+  !hudElements.grounded ||
+  !hudElements.yaw ||
+  !hudElements.pitch ||
+  !hudElements.pointerLock
+) {
+  throw new Error("HUD elements missing.");
+}
+
 const controller = new FirstPersonController(camera, renderer.domElement, {
   moveSpeed: 6,
   jumpSpeed: 9,
   gravity: 25,
   sprintMultiplier: 1.8,
   fieldOfView: 80,
-  onPointerLockChange: (locked) => {
+  onPointerLockToggle: (locked) => {
     document.body.style.cursor = locked ? "none" : "crosshair";
-    statusElements.pointerLock.textContent = locked ? "Locked" : "Free";
+    hudElements.pointerLock.textContent = locked ? "Locked" : "Free";
   },
 });
 
-const statusElements = {
-  speed: document.querySelector<HTMLElement>("[data-speed]"),
-  grounded: document.querySelector<HTMLElement>("[data-grounded]"),
-  pointerLock: document.querySelector<HTMLElement>("[data-pointer-lock]"),
+const params = {
+  moveSpeed: 6,
+  jumpSpeed: 9,
+  gravity: 25,
+  enableCrouch: false,
+  crouchHeight: 1.1,
+  crouchSpeedMultiplier: 0.6,
+  maxSlopeAngle: 65,
+  lookSensitivity: 0.0025,
+  fieldOfView: 80,
 };
 
-if (!statusElements.speed || !statusElements.grounded || !statusElements.pointerLock) {
-  throw new Error("Overlay status elements missing.");
-}
+setupControlPanel();
 
 const clock = new THREE.Clock();
 const previousPosition = camera.position.clone();
@@ -60,6 +84,7 @@ const checkpointSpheres: THREE.Mesh[] = [];
 const labelSprites: Array<{ sprite: THREE.Sprite; baseY: number }> = [];
 const obstaclePillars: THREE.Mesh[] = [];
 let sprintScanner: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial> | undefined;
+let isCrouched = false;
 
 initializeScene();
 animate();
@@ -272,10 +297,17 @@ function createLabel(text: string, position: THREE.Vector3): void {
 
 function animate(): void {
   const delta = clock.getDelta();
-  const elapsed = clock.getElapsedTime();
-
   controller.update(delta);
-  updateStatus(delta);
+
+  updateProps(delta);
+  updateHud(delta);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+function updateProps(delta: number): void {
+  const elapsed = clock.elapsedTime;
 
   obstaclePillars.forEach((pillar, index) => {
     const material = pillar.material as THREE.MeshStandardMaterial;
@@ -295,21 +327,20 @@ function animate(): void {
     sprintScanner.rotation.z += delta * 0.9;
     sprintScanner.material.opacity = 0.2 + Math.sin(elapsed * 2) * 0.05;
   }
-
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
 }
 
-function updateStatus(delta: number): void {
-  tempPosition.copy(camera.position);
-  const distance = tempPosition.distanceTo(previousPosition);
-  const speed = delta > 0 ? distance / delta : 0;
-  statusElements.speed.textContent = `${speed.toFixed(2)} m/s`;
+function updateHud(delta: number): void {
+  const info = controller.getDebugInfo();
+  const fps = delta > 0 ? Math.round(1 / delta) : 0;
 
-  const grounded = camera.position.y <= controller.getHeight() + 0.01;
-  statusElements.grounded.textContent = grounded ? "Yes" : "Airborne";
-  statusElements.pointerLock.textContent = controller.isPointerLocked() ? "Locked" : "Free";
+  hudElements.fps.textContent = fps.toString();
+  hudElements.speed.textContent = info.speed.toFixed(2);
+  hudElements.grounded.textContent = info.onGround ? "Yes" : "Airborne";
+  hudElements.yaw.textContent = `${THREE.MathUtils.radToDeg(info.yaw).toFixed(1)}°`;
+  hudElements.pitch.textContent = `${THREE.MathUtils.radToDeg(info.pitch).toFixed(1)}°`;
+  hudElements.pointerLock.textContent = info.pointerLocked ? "Locked" : "Free";
 
+  tempPosition.copy(controller.getState().position);
   previousPosition.copy(tempPosition);
 }
 
@@ -325,9 +356,170 @@ function cleanupScene(): void {
   controller.dispose();
 }
 
-const hot = (import.meta as ImportMeta & { hot?: { dispose(cb: () => void): void } }).hot;
-if (hot) {
-  hot.dispose(() => {
-    cleanupScene();
+function setupControlPanel(): void {
+  const panel = document.querySelector<HTMLDivElement>("#control-panel");
+  if (!panel) {
+    throw new Error("Control panel element missing.");
+  }
+
+  createSlider(panel, "Move Speed", 2, 12, 0.1, params.moveSpeed, (value) => {
+    params.moveSpeed = value;
+    controller.updateOptions({ moveSpeed: value });
   });
+
+  createSlider(panel, "Jump Speed", 2, 20, 0.1, params.jumpSpeed, (value) => {
+    params.jumpSpeed = value;
+    controller.updateOptions({ jumpSpeed: value });
+  });
+
+  createSlider(panel, "Gravity", 5, 40, 0.5, params.gravity, (value) => {
+    params.gravity = value;
+    controller.updateOptions({ gravity: value });
+  });
+
+  const crouchToggle = createCheckbox(panel, "Enable Crouch", params.enableCrouch, (checked) => {
+    params.enableCrouch = checked;
+    controller.enableCrouch(checked);
+    if (!checked) {
+      isCrouched = false;
+      controller.setCrouch(false);
+      crouchButton.textContent = "Crouch";
+    }
+  });
+
+  createSlider(panel, "Crouch Height", 0.7, 1.6, 0.01, params.crouchHeight, (value) => {
+    params.crouchHeight = value;
+    controller.updateOptions({ crouchHeight: value });
+  });
+
+  createSlider(
+    panel,
+    "Crouch Speed Multiplier",
+    0.2,
+    1,
+    0.01,
+    params.crouchSpeedMultiplier,
+    (value) => {
+      params.crouchSpeedMultiplier = value;
+      controller.updateOptions({ crouchSpeedMultiplier: value });
+    },
+  );
+
+  createSlider(panel, "Max Slope Angle", 0, 80, 1, params.maxSlopeAngle, (value) => {
+    params.maxSlopeAngle = value;
+    controller.updateOptions({ maxSlopeAngle: value });
+  });
+
+  createSlider(panel, "Look Sensitivity", 0.0005, 0.01, 0.0001, params.lookSensitivity, (value) => {
+    params.lookSensitivity = value;
+    controller.setLookSensitivity(value);
+  });
+
+  createSlider(panel, "Field of View", 45, 110, 1, params.fieldOfView, (value) => {
+    params.fieldOfView = value;
+    controller.updateOptions({ fieldOfView: value });
+  });
+
+  const crouchButton = createButton(panel, "Crouch", () => {
+    if (!params.enableCrouch) {
+      crouchToggle.checked = true;
+      crouchToggle.dispatchEvent(new Event("change"));
+      return;
+    }
+
+    isCrouched = !isCrouched;
+    controller.setCrouch(isCrouched);
+    crouchButton.textContent = isCrouched ? "Stand" : "Crouch";
+  });
+
+  const pointerRow = document.createElement("div");
+  pointerRow.className = "button-row";
+  pointerRow.append(
+    createButtonElement("Lock Pointer", () => controller.requestPointerLock()),
+    createButtonElement("Exit Pointer", () => controller.exitPointerLock()),
+  );
+  panel.append(pointerRow);
+}
+
+function createSlider(
+  container: HTMLElement,
+  label: string,
+  min: number,
+  max: number,
+  step: number,
+  initial: number,
+  onChange: (value: number) => void,
+): void {
+  const group = document.createElement("div");
+  group.className = "control-group";
+
+  const labelEl = document.createElement("label");
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "value";
+  valueEl.textContent = initial.toFixed(step < 1 ? 2 : 0);
+
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = min.toString();
+  input.max = max.toString();
+  input.step = step.toString();
+  input.value = initial.toString();
+
+  input.addEventListener("input", () => {
+    const value = parseFloat(input.value);
+    valueEl.textContent = value.toFixed(step < 1 ? 2 : 0);
+    onChange(value);
+  });
+
+  group.append(labelEl, input, valueEl);
+  container.append(group);
+}
+
+function createCheckbox(
+  container: HTMLElement,
+  label: string,
+  initial: boolean,
+  onChange: (value: boolean) => void,
+): HTMLInputElement {
+  const group = document.createElement("div");
+  group.className = "control-group";
+
+  const wrapper = document.createElement("label");
+  wrapper.textContent = label;
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = initial;
+
+  input.addEventListener("change", () => {
+    onChange(input.checked);
+  });
+
+  wrapper.prepend(input);
+  group.append(wrapper);
+  container.append(group);
+  return input;
+}
+
+function createButton(
+  container: HTMLElement,
+  text: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = createButtonElement(text, onClick);
+  const wrapper = document.createElement("div");
+  wrapper.className = "control-group";
+  wrapper.append(button);
+  container.append(wrapper);
+  return button;
+}
+
+function createButtonElement(text: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = text;
+  button.addEventListener("click", onClick);
+  return button;
 }

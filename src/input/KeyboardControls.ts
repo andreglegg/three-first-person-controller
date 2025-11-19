@@ -57,6 +57,11 @@ export class KeyboardControls {
     this.attached = false;
   }
 
+  dispose(): void {
+    this.detach();
+    this.reset();
+  }
+
   reset(): void {
     this.pressedKeys.clear();
   }
@@ -82,11 +87,6 @@ export class KeyboardControls {
     this.keyBindings = updated;
   }
 
-  dispose(): void {
-    this.detach();
-    this.reset();
-  }
-
   private isMovementKey(code: KeyCode): boolean {
     return Object.values(this.keyBindings).some((binding) => binding.includes(code));
   }
@@ -97,7 +97,7 @@ export class KeyboardControls {
     }
 
     const activeElement = document.activeElement;
-    if (!activeElement) {
+    if (!activeElement || !(activeElement instanceof Node)) {
       return false;
     }
 
@@ -105,7 +105,7 @@ export class KeyboardControls {
       return true;
     }
 
-    return activeElement instanceof Node && this.target.contains(activeElement);
+    return this.target.contains(activeElement);
   }
 
   private static cloneBindings(bindings: KeyBindings): KeyBindings {

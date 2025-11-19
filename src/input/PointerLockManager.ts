@@ -10,11 +10,17 @@ export class PointerLockManager {
   private readonly supported: boolean;
   private enabled: boolean;
   private autoLock: boolean;
-  private readonly callbacks: PointerLockCallbacks = {};
+  private callbacks: PointerLockCallbacks = {};
   private attached = false;
 
   private readonly pointerLockChangeHandler = (): void => {
-    this.callbacks.onPointerLockChange?.(this.isLocked());
+    this.notify(this.isLocked());
+  };
+
+  private readonly keydownHandler = (event: KeyboardEvent): void => {
+    if (event.key === "Escape" && this.isLocked()) {
+      this.exitLock();
+    }
   };
 
   constructor(domElement: HTMLElement, options: PointerLockOptions) {
@@ -24,9 +30,7 @@ export class PointerLockManager {
       typeof document.exitPointerLock === "function";
     this.enabled = this.supported ? options.enabled : false;
     this.autoLock = options.autoLock;
-    if (options.onPointerLockChange) {
-      this.callbacks.onPointerLockChange = options.onPointerLockChange;
-    }
+    this.setCallbacks(options);
   }
 
   attach(): void {
@@ -35,6 +39,7 @@ export class PointerLockManager {
     }
 
     document.addEventListener("pointerlockchange", this.pointerLockChangeHandler);
+    document.addEventListener("keydown", this.keydownHandler, true);
     this.attached = true;
   }
 
@@ -44,6 +49,7 @@ export class PointerLockManager {
     }
 
     document.removeEventListener("pointerlockchange", this.pointerLockChangeHandler);
+    document.removeEventListener("keydown", this.keydownHandler, true);
     this.attached = false;
   }
 
@@ -85,6 +91,16 @@ export class PointerLockManager {
     this.autoLock = autoLock;
   }
 
+  setCallbacks(callbacks: PointerLockCallbacks): void {
+    this.callbacks = {};
+    if (callbacks.onPointerLockChange) {
+      this.callbacks.onPointerLockChange = callbacks.onPointerLockChange;
+    }
+    if (callbacks.onPointerLockToggle) {
+      this.callbacks.onPointerLockToggle = callbacks.onPointerLockToggle;
+    }
+  }
+
   requestLock(): void {
     if (!this.supported || !this.enabled) {
       return;
@@ -97,11 +113,17 @@ export class PointerLockManager {
 
   exitLock(): void {
     if (!this.supported || document.pointerLockElement !== this.domElement) {
+      this.notify(false);
       return;
     }
 
     if (typeof document.exitPointerLock === "function") {
       void document.exitPointerLock();
     }
+  }
+
+  private notify(locked: boolean): void {
+    this.callbacks.onPointerLockChange?.(locked);
+    this.callbacks.onPointerLockToggle?.(locked);
   }
 }

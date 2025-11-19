@@ -1,6 +1,6 @@
 # three-first-person-controller
 
-Lightweight first-person movement controller for Three.js scenes. Handles pointer lock, WASD movement, jumping, and gravity so you can focus on building the rest of your experience.
+Lightweight first-person movement controller for Three.js scenes. Handles pointer lock, WASD movement, jumping, gravity, crouching, custom gravity, and debugging helpers so you can focus on building the rest of your experience.
 
 ## Installation
 
@@ -58,7 +58,7 @@ const controller = new FirstPersonController(camera, renderer.domElement, {
   fieldOfView: 80,
   enablePointerLock: true,
   autoPointerLock: false,
-  onPointerLockChange: (locked) => console.log("pointer lock?", locked),
+  onPointerLockToggle: (locked) => console.log("pointer lock?", locked),
   onJump: () => console.log("jump!"),
 });
 ```
@@ -71,11 +71,107 @@ controller.setLookSensitivity(0.001);
 controller.setKeyBindings({ jump: ["KeyF"] });
 controller.setFieldOfView(90);
 controller.setPointerLockEnabled(false); // handle pointer lock yourself
+controller.enableCrouch(true);
+controller.setCrouch(true);
 controller.dispose(); // remove all DOM listeners when tearing down the scene
 
-// Need the current camera baseline height (e.g. for HUDs)?:
+// Need the current camera baseline height (e.g., for HUDs)?:
 controller.getHeight();
 ```
+
+### Advanced Options
+
+All advanced features default to disabled/off so the controller behaves exactly like previous releases until you opt in.
+
+- `gravityFn(position)` – custom gravity per-position. Return an acceleration vector (units/second²). Defaults to `new THREE.Vector3(0, -gravity, 0)`.
+- `groundCheckFn(state, delta)` – custom ground detection. Return `{ onGround, groundNormal }` so you can plug in your own raycasts or physics engine.
+- `enableCrouch`, `crouchHeight`, `crouchSpeedMultiplier` – enable crouching, set the crouch eye height, and (optionally) slow movement while crouched.
+- `maxStepHeight` – maximum vertical distance (in world units) that can be auto-snapped when resolving ground.
+- `maxSlopeAngle` – maximum walkable slope in degrees. Steeper normals are treated as walls.
+- `onPointerLockToggle` – notified whenever pointer lock is toggled (includes Escape exits).
+
+### Custom gravity examples
+
+Spherical gravity:
+
+```ts
+const gravityValue = 30;
+
+const controller = new FirstPersonController(camera, domElement, {
+  gravityFn: (position) => {
+    const center = new THREE.Vector3(0, 0, 0);
+    const direction = position.clone().sub(center).normalize();
+    return direction.multiplyScalar(-gravityValue);
+  },
+});
+```
+
+Simple cube-planet gravity (faces point to the axis that dominates the position):
+
+```ts
+gravityFn: (position) => {
+  const axes = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(0, -1, 0),
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(0, 0, -1),
+  ];
+
+  const face = axes.reduce((best, axis) =>
+    Math.abs(axis.dot(position)) > Math.abs(best.dot(position)) ? axis : best,
+  );
+  return face.clone().multiplyScalar(-20);
+};
+```
+
+### Custom ground checks
+
+You can implement your own collision logic and share it with the controller through `groundCheckFn`:
+
+```ts
+const controller = new FirstPersonController(camera, domElement, {
+  groundCheckFn: (state) => {
+    // Example with a physics engine
+    const result = physics.raycastDown(state.position);
+    if (!result) return { onGround: false, groundNormal: null };
+
+    return {
+      onGround: result.distance <= 0.1,
+      groundNormal: result.normal.clone(),
+    };
+  },
+  maxSlopeAngle: 55,
+});
+```
+
+### State & debug helpers
+
+The controller now exposes both immutable state snapshots and runtime diagnostics:
+
+```ts
+// Copy the current controller state (cloned vectors)
+const state = controller.getState();
+console.log(state.position, state.velocity);
+
+// Apply controller state to any camera (e.g., a minimap view)
+controller.applyToCamera(minimapCamera);
+
+// Build a HUD from getDebugInfo()
+const info = controller.getDebugInfo();
+debugPanel.update({
+  speed: info.speed, // horizontal velocity magnitude in units/sec
+  grounded: info.onGround,
+  yaw: THREE.MathUtils.radToDeg(info.yaw),
+  pitch: THREE.MathUtils.radToDeg(info.pitch),
+  pointer: info.pointerLocked,
+});
+```
+
+### Pointer lock helpers
+
+The controller exposes `requestPointerLock()` and `exitPointerLock()` so you can wire custom UI (buttons, pause menus, etc.). Pointer lock now also exits cleanly when the user presses Escape, and `onPointerLockToggle` lets you listen to state changes.
 
 ## Test Scene
 
@@ -86,17 +182,70 @@ npm install
 npm run dev
 ```
 
-This starts a Vite dev server that serves the files in `demo/`. The scene includes three focused test zones (obstacle field, jump course, sprint lane) plus a live HUD so you can validate pointer lock, strafing, jumping, and sprint speed tweaks from the console. Use `npm run demo:build` to produce a static build (output in `dist-demo/`) and `npm run demo:preview` to serve that build.
+This starts a Vite dev server that serves the files in `demo/`. The scene includes three focused test zones (obstacle field, jump course, sprint lane), a live HUD driven by `getDebugInfo()`, and a control panel where you can tweak move speed, gravity, crouch settings, slope limits, look sensitivity, and FOV. Use `npm run demo:build` to produce a static build (output in `dist-demo/`) and `npm run demo:preview` to serve that build.
 
 ## Architecture
 
 The source is organized with explicit layers so you can extend or replace pieces as needed:
 
-- `src/types.ts` centralizes all shared interfaces (config, bindings, options) and is re-exported from the package entry point.
+- `src/types.ts` centralizes all shared interfaces (config, bindings, options, callbacks, controller state) and is re-exported from the package entry point.
 - `src/constants.ts` defines the immutable defaults for physics tuning and input, making it easy to build variant controllers without touching logic.
 - `src/input/KeyboardControls.ts` and `src/input/PointerLockManager.ts` encapsulate DOM interactions (keyboard listeners and pointer-lock lifecycle), keeping `FirstPersonController` focused on simulation.
-- `src/FirstPersonController.ts` wires the input helpers into the movement integrator that mutates the `THREE.PerspectiveCamera`.
+- `src/FirstPersonController.ts` wires the input helpers into the movement integrator that mutates both an internal controller state and the owning `THREE.PerspectiveCamera`.
 - TypeScript runs in strict mode with additional flags (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, etc.), so keep everything strongly typed and avoid implicit `any`/`null` usages.
+
+## API Reference
+
+### Constructor
+
+`new FirstPersonController(camera: THREE.PerspectiveCamera, domElement: HTMLElement, options?: FirstPersonControllerOptions)`
+
+### Methods
+
+- `update(deltaSeconds: number)`
+- `updateOptions(options: FirstPersonControllerOptions)`
+- `setMovementConfig(config: Partial<PlayerConfig>)`
+- `setLookSensitivity(value: number)`
+- `setMaxPitch(value: number)`
+- `setSprintMultiplier(value: number)`
+- `setPointerLockEnabled(enabled: boolean)`
+- `setAutoPointerLock(enabled: boolean)`
+- `setKeyBindings(bindings: KeyBindingsOverrides)`
+- `setPointerLockChangeCallback(callback?: (locked: boolean) => void)`
+- `setJumpCallback(callback?: () => void)`
+- `isPointerLocked(): boolean`
+- `getHeight(): number`
+- `getState(): Readonly<ControllerState>`
+- `applyToCamera(camera: THREE.PerspectiveCamera): void`
+- `requestPointerLock(): void`
+- `exitPointerLock(): void`
+- `enableCrouch(enabled: boolean): void`
+- `setCrouch(enabled: boolean): void`
+- `getDebugInfo()`
+- `dispose(): void`
+
+### Options & callbacks
+
+All properties are optional and default to the classic behavior.
+
+- `height`, `moveSpeed`, `jumpSpeed`, `gravity`
+- `lookSensitivity`, `maxPitch`, `sprintMultiplier`
+- `enablePointerLock`, `autoPointerLock`
+- `keyBindings`
+- `fieldOfView`
+- `gravityFn`, `groundCheckFn`
+- `enableCrouch`, `crouchHeight`, `crouchSpeedMultiplier`
+- `maxStepHeight`, `maxSlopeAngle`
+- `onPointerLockChange`, `onPointerLockToggle`, `onJump`
+
+### Exported types
+
+- `PlayerConfig`
+- `KeyBindings`, `KeyBindingsOverrides`
+- `FirstPersonControllerOptions`
+- `ControllerState`
+- `GravityFn`
+- `GroundCheckFn`
 
 ## Building & Publishing
 

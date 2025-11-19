@@ -12,27 +12,45 @@
         First Person Controller
         <span class="badge">Prototype</span>
       </h1>
-      <div class="status-grid">
+      <p>Click the canvas to lock the pointer, then move through each test zone:</p>
+      <ul class="checklist">
+        <li><span>Obstacle Field</span> Strafe with WASD + mouse look.</li>
+        <li><span>Jump Course</span> Use Space to climb the staggered platforms.</li>
+        <li><span>Sprint Lane</span> Hold Shift to feel the extra speed down the white track.</li>
+      </ul>
+      <p class="details">
+        Use the control panel to tweak speeds, gravity, crouch, slopes, sensitivity, and FOV. The
+        HUD shows live diagnostics from <code>getDebugInfo()</code>.
+      </p>
+      <div class="hud-grid">
+        <div>
+          <span>FPS</span>
+          <strong data-hud-fps>0</strong>
+        </div>
         <div>
           <span>Speed</span>
-          <strong data-speed>0.00 m/s</strong>
+          <strong data-hud-speed>0.00</strong>
         </div>
         <div>
           <span>Grounded</span>
-          <strong data-grounded>Yes</strong>
+          <strong data-hud-grounded>No</strong>
         </div>
         <div>
-          <span>Pointer Lock</span>
-          <strong data-pointer-lock>Free</strong>
+          <span>Yaw</span>
+          <strong data-hud-yaw>0°</strong>
+        </div>
+        <div>
+          <span>Pitch</span>
+          <strong data-hud-pitch>0°</strong>
+        </div>
+        <div>
+          <span>Pointer</span>
+          <strong data-hud-pointer>Free</strong>
         </div>
       </div>
-      <p>Click the canvas to lock the pointer, then move through each test zone:</p>
-      <ul class="checklist">
-        <li><span>Obstacle Field</span> Strafe through the glowing pillars with WASD + mouse look.</li>
-        <li><span>Jump Course</span> Use Space to scale the staggered platforms.</li>
-        <li><span>Sprint Lane</span> Hold Shift to feel the extra speed down the white track.</li>
-      </ul>
-      <p class="details">Use the console to tweak controller options (speed, FOV, bindings, etc.).</p>
+    </div>
+    <div class="control-panel" id="control-panel">
+      <h2>Controller Tuning</h2>
     </div>
     <script type="module" src="/main.ts"></script>
   </body>

@@ -4,4 +4,8 @@ export type {
   KeyBindings,
   KeyBindingsOverrides,
   FirstPersonControllerOptions,
+  ControllerState,
+  GravityFn,
+  GroundCheckFn,
+  MovementAction,
 } from "./types.js";
