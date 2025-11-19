@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>First Person Controller Demo</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div class="overlay">
+      <h1>
+        First Person Controller
+        <span class="badge">Prototype</span>
+      </h1>
+      <div class="status-grid">
+        <div>
+          <span>Speed</span>
+          <strong data-speed>0.00 m/s</strong>
+        </div>
+        <div>
+          <span>Grounded</span>
+          <strong data-grounded>Yes</strong>
+        </div>
+        <div>
+          <span>Pointer Lock</span>
+          <strong data-pointer-lock>Free</strong>
+        </div>
+      </div>
+      <p>Click the canvas to lock the pointer, then move through each test zone:</p>
+      <ul class="checklist">
+        <li><span>Obstacle Field</span> Strafe through the glowing pillars with WASD + mouse look.</li>
+        <li><span>Jump Course</span> Use Space to scale the staggered platforms.</li>
+        <li><span>Sprint Lane</span> Hold Shift to feel the extra speed down the white track.</li>
+      </ul>
+      <p class="details">Use the console to tweak controller options (speed, FOV, bindings, etc.).</p>
+    </div>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
