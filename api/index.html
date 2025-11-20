@@ -6,12 +6,31 @@
     <title>three-first-person-controller API</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
     <style>
-      body { background: #0f141c; color: #e9eef7; }
-      main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
-      .nav { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
-      .nav a { color: #9ad0ff; }
-      pre { background: #0b1018; border: 1px solid #1c2736; }
-      code { color: #e6f3ff; }
+      body {
+        background: #0f141c;
+        color: #e9eef7;
+      }
+      main {
+        max-width: 960px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      .nav {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      .nav a {
+        color: #9ad0ff;
+      }
+      pre {
+        background: #0b1018;
+        border: 1px solid #1c2736;
+      }
+      code {
+        color: #e6f3ff;
+      }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   </head>
@@ -27,7 +46,9 @@
     </main>
     <script>
       async function loadDocs() {
-        const res = await fetch("https://raw.githubusercontent.com/andreglegg/three-first-person-controller/main/README.md");
+        const res = await fetch(
+          "https://raw.githubusercontent.com/andreglegg/three-first-person-controller/main/README.md",
+        );
         if (!res.ok) throw new Error("Failed to load README");
         const md = await res.text();
         const html = marked.parse(md, { mangle: false, headerIds: true });
@@ -38,6 +59,7 @@
           if (target) target.scrollIntoView();
         }
       }
+
       loadDocs().catch((err) => {
         document.getElementById("content").textContent = err.message;
         console.error(err);
