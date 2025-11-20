@@ -10,6 +10,11 @@ npm install three-first-person-controller three
 
 `three` is declared as a peer dependency, so ensure it is installed in your project.
 
+## Demo & Docs
+
+- Live demo (GitHub Pages): https://andreglegg.github.io/threejsFirstPersonController/
+- API docs: https://andreglegg.github.io/threejsFirstPersonController/#api-reference
+
 ## Upgrade guide
 
 The 0.2 line cleans up the public API:
