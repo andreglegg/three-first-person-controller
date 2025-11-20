@@ -51,7 +51,8 @@ if (
   throw new Error("HUD elements missing.");
 }
 
-const controller = new FirstPersonController(camera, renderer.domElement, {
+const controller = new FirstPersonController(camera, {
+  element: renderer.domElement,
   moveSpeed: 6,
   jumpSpeed: 9,
   gravity: 25,
