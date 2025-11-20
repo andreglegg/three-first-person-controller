@@ -12,8 +12,8 @@ npm install three-first-person-controller three
 
 ## Demo & Docs
 
-- Live demo (GitHub Pages): https://andreglegg.github.io/threejsFirstPersonController/
-- API docs: https://andreglegg.github.io/threejsFirstPersonController/#api-reference
+- Live demo (GitHub Pages): https://andreglegg.github.io/three-first-person-controller/
+- API docs: https://andreglegg.github.io/three-first-person-controller/api/
 
 ## Upgrade guide
 
