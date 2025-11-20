@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.2.0](https://github.com/andreglegg/three-first-person-controller/compare/v0.1.2...v0.2.0) (2025-11-20)
+
+### Features
+
+- add look-only `LookController` and `lookOnly` mode with `onLookChange` hook and `setLookAngles`
+- switch constructor to `{ element, ...options }` shape and expose pointer-lock helpers `lockPointer`/`unlockPointer`
+- export tree-shakable `look-only` subpath and add README demo/API links and upgrade guide
+
 ### [0.1.2](https://github.com/andreglegg/three-first-person-controller/compare/v0.1.1...v0.1.2) (2025-11-19)
 
 
