@@ -19,7 +19,8 @@ describe("FirstPersonController", () => {
     return {
       camera,
       element,
-      controller: new FirstPersonController(camera, element, {
+      controller: new FirstPersonController(camera, {
+        element,
         enablePointerLock: false,
       }),
     };
@@ -57,7 +58,8 @@ describe("FirstPersonController", () => {
     const element = document.createElement("div");
     const customPosition = new THREE.Vector3(10, 5, 20);
 
-    const controller = new FirstPersonController(camera, element, {
+    const controller = new FirstPersonController(camera, {
+      element,
       enablePointerLock: false,
       initialPosition: customPosition,
     });
@@ -139,7 +141,8 @@ describe("FirstPersonController", () => {
     const element = document.createElement("div");
 
     let gravityCallCount = 0;
-    const controller = new FirstPersonController(camera, element, {
+    const controller = new FirstPersonController(camera, {
+      element,
       enablePointerLock: false,
       gravityFn: (position) => {
         gravityCallCount++;
@@ -159,7 +162,8 @@ describe("FirstPersonController", () => {
     const element = document.createElement("div");
 
     let groundCheckCallCount = 0;
-    const controller = new FirstPersonController(camera, element, {
+    const controller = new FirstPersonController(camera, {
+      element,
       enablePointerLock: false,
       groundCheckFn: (state, delta) => {
         groundCheckCallCount++;
@@ -267,7 +271,8 @@ describe("FirstPersonController", () => {
     element.focus();
     const jumpCallback = vi.fn();
 
-    const controller = new FirstPersonController(camera, element, {
+    const controller = new FirstPersonController(camera, {
+      element,
       enablePointerLock: false,
       onJump: jumpCallback,
     });
@@ -318,5 +323,35 @@ describe("FirstPersonController", () => {
     controller.exitPointerLock(); // Should do nothing
 
     document.body.innerHTML = "";
+  });
+
+  it("supports look-only mode while keeping camera position untouched", () => {
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    camera.position.set(2, 3, 4);
+    const element = document.createElement("div");
+    element.tabIndex = 0;
+    document.body.appendChild(element);
+    Object.assign(element, {
+      requestPointerLock: vi.fn(),
+    });
+    const onLookChange = vi.fn();
+
+    const controller = new FirstPersonController(camera, {
+      element,
+      enablePointerLock: false,
+      lookOnly: true,
+      onLookChange,
+    });
+
+    const initialPosition = camera.position.clone();
+
+    controller.setLookAngles(Math.PI / 4, 0.1);
+    controller.update(0.016);
+
+    expect(camera.position.equals(initialPosition)).toBe(true);
+    expect(onLookChange).toHaveBeenCalled();
+
+    controller.dispose();
+    document.body.removeChild(element);
   });
 });

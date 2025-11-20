@@ -16,6 +16,7 @@ import type {
   GroundCheckFn,
   KeyBindingsOverrides,
   PlayerConfig,
+  LookChangeCallback,
 } from "./types.js";
 import { KeyboardControls } from "./input/KeyboardControls.js";
 import { PointerLockManager } from "./input/PointerLockManager.js";
@@ -44,8 +45,10 @@ export class FirstPersonController {
   private maxPitch: number;
   private sprintMultiplier: number;
   private fieldOfView: number;
+  private lookOnly: boolean;
   private pointerLockChangeCallback: ((locked: boolean) => void) | undefined;
   private pointerLockToggleCallback: ((locked: boolean) => void) | undefined;
+  private lookChangeCallback: LookChangeCallback | undefined;
   private jumpCallback: (() => void) | undefined;
   private gravityFn: GravityFn | undefined;
   private groundCheckFn: GroundCheckFn | undefined;
@@ -104,16 +107,19 @@ export class FirstPersonController {
       -this.maxPitch,
       this.maxPitch,
     );
-    this.applyToCamera(this.camera);
+    this.applyToCamera(this.camera, { includePosition: !this.lookOnly });
+    this.notifyLookChange();
   };
 
-  constructor(
-    camera: THREE.PerspectiveCamera,
-    domElement: HTMLElement,
-    options: FirstPersonControllerOptions = {},
-  ) {
+  constructor(camera: THREE.PerspectiveCamera, options: FirstPersonControllerOptions) {
     this.camera = camera;
-    this.domElement = domElement;
+    if (!options || !("element" in options) || !options.element) {
+      throw new Error(
+        "FirstPersonController requires options with an { element } property. Use new FirstPersonController(camera, { element, ...options }).",
+      );
+    }
+
+    this.domElement = options.element;
     if (this.domElement.tabIndex < 0) {
       this.domElement.tabIndex = 0;
     }
@@ -123,8 +129,10 @@ export class FirstPersonController {
     this.maxPitch = DEFAULT_MAX_PITCH;
     this.sprintMultiplier = DEFAULT_SPRINT_MULTIPLIER;
     this.fieldOfView = options.fieldOfView ?? camera.fov;
+    this.lookOnly = options.lookOnly ?? false;
     this.pointerLockChangeCallback = options.onPointerLockChange ?? undefined;
     this.pointerLockToggleCallback = options.onPointerLockToggle ?? undefined;
+    this.lookChangeCallback = options.onLookChange ?? undefined;
     this.jumpCallback = options.onJump ?? undefined;
     this.gravityFn = options.gravityFn ?? undefined;
     this.groundCheckFn = options.groundCheckFn ?? undefined;
@@ -141,7 +149,7 @@ export class FirstPersonController {
     this.initialPosition =
       options.initialPosition?.clone() ?? new THREE.Vector3(0, this.config.height, -5);
 
-    this.keyboard = new KeyboardControls(DEFAULT_KEY_BINDINGS, domElement);
+    this.keyboard = new KeyboardControls(DEFAULT_KEY_BINDINGS, this.domElement);
     this.pointerLock = new PointerLockManager(this.domElement, {
       enabled: options.enablePointerLock ?? true,
       autoLock: options.autoPointerLock ?? true,
@@ -155,6 +163,11 @@ export class FirstPersonController {
 
   update(deltaSeconds: number): void {
     if (this.disposed) {
+      return;
+    }
+
+    if (this.lookOnly) {
+      this.applyToCamera(this.camera, { includePosition: false });
       return;
     }
 
@@ -192,7 +205,21 @@ export class FirstPersonController {
 
   setMaxPitch(value: number): void {
     this.maxPitch = Math.max(0.1, Math.min(Math.PI / 2 - 0.01, value));
-    this.state.pitch = THREE.MathUtils.clamp(this.state.pitch, -this.maxPitch, this.maxPitch);
+    const clamped = THREE.MathUtils.clamp(this.state.pitch, -this.maxPitch, this.maxPitch);
+    const changed = clamped !== this.state.pitch;
+    this.state.pitch = clamped;
+    if (changed) {
+      this.applyToCamera(this.camera, { includePosition: !this.lookOnly });
+      this.notifyLookChange();
+    }
+  }
+
+  setLookAngles(yaw: number, pitch: number = this.state.pitch): void {
+    this.state.yaw = yaw;
+    const clampedPitch = THREE.MathUtils.clamp(pitch, -this.maxPitch, this.maxPitch);
+    this.state.pitch = clampedPitch;
+    this.applyToCamera(this.camera, { includePosition: !this.lookOnly });
+    this.notifyLookChange();
   }
 
   setSprintMultiplier(multiplier: number): void {
@@ -220,6 +247,14 @@ export class FirstPersonController {
     this.pointerLockChangeCallback = callback;
   }
 
+  setPointerLockToggleCallback(callback: ((locked: boolean) => void) | undefined): void {
+    this.pointerLockToggleCallback = callback;
+  }
+
+  setLookChangeCallback(callback: LookChangeCallback | undefined): void {
+    this.lookChangeCallback = callback;
+  }
+
   setJumpCallback(callback: (() => void) | undefined): void {
     this.jumpCallback = callback;
   }
@@ -242,8 +277,13 @@ export class FirstPersonController {
     });
   }
 
-  applyToCamera(camera: THREE.PerspectiveCamera): void {
-    camera.position.copy(this.state.position);
+  applyToCamera(camera: THREE.PerspectiveCamera, options?: { includePosition?: boolean }): void {
+    const includePosition = options?.includePosition ?? true;
+
+    if (includePosition) {
+      camera.position.copy(this.state.position);
+    }
+
     this.tempEuler.set(this.state.pitch, this.state.yaw, 0);
     camera.quaternion.setFromEuler(this.tempEuler);
     camera.fov = this.fieldOfView;
@@ -251,7 +291,7 @@ export class FirstPersonController {
     camera.updateMatrixWorld();
   }
 
-  requestPointerLock(): void {
+  lockPointer(): void {
     if (this.disposed) {
       return;
     }
@@ -259,12 +299,20 @@ export class FirstPersonController {
     this.pointerLock.requestLock();
   }
 
-  exitPointerLock(): void {
+  unlockPointer(): void {
     if (this.disposed) {
       return;
     }
 
     this.pointerLock.exitLock();
+  }
+
+  requestPointerLock(): void {
+    this.lockPointer();
+  }
+
+  exitPointerLock(): void {
+    this.unlockPointer();
   }
 
   enableCrouch(enabled: boolean): void {
@@ -315,19 +363,31 @@ export class FirstPersonController {
   }
 
   private initializeCamera(): void {
-    this.state.position.copy(this.initialPosition);
     this.state.velocity.set(0, 0, 0);
-    this.state.yaw = 0;
-    this.state.pitch = 0;
     this.state.onGround = true;
     this.currentHeight = this.config.height;
+
+    if (this.lookOnly) {
+      this.state.position.copy(this.camera.position);
+      this.tempEuler.setFromQuaternion(this.camera.quaternion, "YXZ");
+      this.state.yaw = this.tempEuler.y;
+      this.state.pitch = THREE.MathUtils.clamp(this.tempEuler.x, -this.maxPitch, this.maxPitch);
+      this.applyToCamera(this.camera, { includePosition: false });
+      return;
+    }
+
+    this.state.position.copy(this.initialPosition);
+    this.state.yaw = 0;
+    this.state.pitch = 0;
     this.applyToCamera(this.camera);
   }
 
   private initializeListeners(): void {
     this.domElement.addEventListener("click", this.onClickHandler);
     document.addEventListener("mousemove", this.onMouseMoveHandler);
-    this.keyboard.attach();
+    if (!this.lookOnly) {
+      this.keyboard.attach();
+    }
     this.pointerLock.attach();
   }
 
@@ -461,6 +521,10 @@ export class FirstPersonController {
   private applyOptions(options: FirstPersonControllerOptions): void {
     const movementUpdates: Partial<PlayerConfig> = {};
 
+    if (hasOwn(options, "lookOnly")) {
+      this.setLookOnlyMode(options.lookOnly ?? false);
+    }
+
     if (options.height !== undefined) movementUpdates.height = options.height;
     if (options.moveSpeed !== undefined) movementUpdates.moveSpeed = options.moveSpeed;
     if (options.jumpSpeed !== undefined) movementUpdates.jumpSpeed = options.jumpSpeed;
@@ -496,6 +560,10 @@ export class FirstPersonController {
 
     if (options.fieldOfView !== undefined) {
       this.setFieldOfView(options.fieldOfView);
+    }
+
+    if (hasOwn(options, "onLookChange")) {
+      this.lookChangeCallback = options.onLookChange ?? undefined;
     }
 
     if (hasOwn(options, "gravityFn")) {
@@ -545,6 +613,33 @@ export class FirstPersonController {
     }
   }
 
+  private setLookOnlyMode(enabled: boolean): void {
+    if (this.lookOnly === enabled) {
+      return;
+    }
+
+    this.lookOnly = enabled;
+
+    if (enabled) {
+      this.keyboard.detach();
+      this.state.velocity.set(0, 0, 0);
+    } else {
+      this.keyboard.attach();
+      this.state.position.copy(this.camera.position);
+      this.tempEuler.setFromQuaternion(this.camera.quaternion, "YXZ");
+      this.state.yaw = this.tempEuler.y;
+      this.state.pitch = THREE.MathUtils.clamp(this.tempEuler.x, -this.maxPitch, this.maxPitch);
+      this.state.onGround = true;
+    }
+
+    this.applyToCamera(this.camera, { includePosition: !this.lookOnly });
+    this.notifyLookChange();
+  }
+
+  private notifyLookChange(): void {
+    this.lookChangeCallback?.(this.state.yaw, this.state.pitch);
+  }
+
   private computeCrouchHeight(value?: number): number {
     const base = value ?? this.config.height * DEFAULT_CROUCH_HEIGHT_RATIO;
     return THREE.MathUtils.clamp(base, MIN_CROUCH_HEIGHT, this.config.height);
@@ -552,6 +647,6 @@ export class FirstPersonController {
 
   setFieldOfView(value: number): void {
     this.fieldOfView = Math.max(10, Math.min(150, value));
-    this.applyToCamera(this.camera);
+    this.applyToCamera(this.camera, { includePosition: !this.lookOnly });
   }
 }

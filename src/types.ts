@@ -20,6 +20,8 @@ export interface PointerLockCallbacks {
   onPointerLockToggle?: (locked: boolean) => void;
 }
 
+export type LookChangeCallback = (yaw: number, pitch: number) => void;
+
 export interface ControllerState {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -35,14 +37,19 @@ export type GroundCheckFn = (
   delta: number,
 ) => { onGround: boolean; groundNormal: THREE.Vector3 | null };
 
-export interface FirstPersonControllerOptions extends Partial<PlayerConfig>, PointerLockCallbacks {
+export interface LookControllerOptions extends PointerLockCallbacks {
+  element: HTMLElement;
   lookSensitivity?: number;
   maxPitch?: number;
-  sprintMultiplier?: number;
   enablePointerLock?: boolean;
   autoPointerLock?: boolean;
-  keyBindings?: KeyBindingsOverrides;
   fieldOfView?: number;
+  onLookChange?: LookChangeCallback;
+}
+
+export interface FirstPersonControllerOptions extends Partial<PlayerConfig>, LookControllerOptions {
+  sprintMultiplier?: number;
+  keyBindings?: KeyBindingsOverrides;
   gravityFn?: GravityFn;
   groundCheckFn?: GroundCheckFn;
   enableCrouch?: boolean;
@@ -52,4 +59,5 @@ export interface FirstPersonControllerOptions extends Partial<PlayerConfig>, Poi
   maxSlopeAngle?: number;
   onJump?: () => void;
   initialPosition?: THREE.Vector3;
+  lookOnly?: boolean;
 }

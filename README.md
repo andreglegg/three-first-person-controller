@@ -19,7 +19,7 @@ import { FirstPersonController } from "three-first-person-controller";
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector("canvas")! });
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-const controller = new FirstPersonController(camera, renderer.domElement);
+const controller = new FirstPersonController(camera, { element: renderer.domElement });
 const clock = new THREE.Clock();
 
 function animate() {
@@ -37,12 +37,15 @@ animate();
 - Movement uses `WASD` keys, `Space` to jump, and the controller automatically applies gravity to keep the camera grounded.
 - Call `controller.update(deltaSeconds)` every frame so velocities and gravity remain stable irrespective of frame rate.
 
+Note: the constructor now takes an options object; pass the DOM element as `new FirstPersonController(camera, { element: renderer.domElement, ... })`.
+
 ## Configuration
 
 Supply an options object to customize physics, pointer lock behavior, and key bindings. Every option is optional.
 
 ```ts
-const controller = new FirstPersonController(camera, renderer.domElement, {
+const controller = new FirstPersonController(camera, {
+  element: renderer.domElement,
   height: 1.75,
   moveSpeed: 6,
   jumpSpeed: 9,
@@ -97,7 +100,8 @@ Spherical gravity:
 ```ts
 const gravityValue = 30;
 
-const controller = new FirstPersonController(camera, domElement, {
+const controller = new FirstPersonController(camera, {
+  element: domElement,
   gravityFn: (position) => {
     const center = new THREE.Vector3(0, 0, 0);
     const direction = position.clone().sub(center).normalize();
@@ -131,7 +135,8 @@ gravityFn: (position) => {
 You can implement your own collision logic and share it with the controller through `groundCheckFn`:
 
 ```ts
-const controller = new FirstPersonController(camera, domElement, {
+const controller = new FirstPersonController(camera, {
+  element: domElement,
   groundCheckFn: (state) => {
     // Example with a physics engine
     const result = physics.raycastDown(state.position);
@@ -171,7 +176,14 @@ debugPanel.update({
 
 ### Pointer lock helpers
 
-The controller exposes `requestPointerLock()` and `exitPointerLock()` so you can wire custom UI (buttons, pause menus, etc.). Pointer lock now also exits cleanly when the user presses Escape, and `onPointerLockToggle` lets you listen to state changes.
+The controller exposes `lockPointer()`, `unlockPointer()`, and `isPointerLocked()` (with `requestPointerLock`/`exitPointerLock` aliases) so you can wire custom UI (buttons, pause menus, etc.). Pointer lock exits cleanly when the user presses Escape, and `onPointerLockToggle` lets you listen to state changes.
+
+### Look-only mode & hooks
+
+- Pass `lookOnly: true` to `FirstPersonController` to skip all position/velocity updates while still handling pointer lock and yaw/pitch.
+- Use `onLookChange(yaw, pitch)` to mirror orientation into your own camera or physics system without cloning cameras.
+- For a minimal bundle, import the standalone look controller: `import { LookController } from "three-first-person-controller/look-only";`.
+- When mirroring orientation (e.g., `applyToCamera(otherCamera, { includePosition: false })`), positions stay untouched so your own movement system stays in control.
 
 ## Test Scene
 
@@ -192,60 +204,86 @@ The source is organized with explicit layers so you can extend or replace pieces
 - `src/constants.ts` defines the immutable defaults for physics tuning and input, making it easy to build variant controllers without touching logic.
 - `src/input/KeyboardControls.ts` and `src/input/PointerLockManager.ts` encapsulate DOM interactions (keyboard listeners and pointer-lock lifecycle), keeping `FirstPersonController` focused on simulation.
 - `src/FirstPersonController.ts` wires the input helpers into the movement integrator that mutates both an internal controller state and the owning `THREE.PerspectiveCamera`.
+- `src/LookController.ts` is the pointer-lock + yaw/pitch-only variant for apps that handle movement themselves.
 - TypeScript runs in strict mode with additional flags (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, etc.), so keep everything strongly typed and avoid implicit `any`/`null` usages.
 
 ## API Reference
 
-### Constructor
+### Constructors
 
-`new FirstPersonController(camera: THREE.PerspectiveCamera, domElement: HTMLElement, options?: FirstPersonControllerOptions)`
+- `new FirstPersonController(camera: THREE.PerspectiveCamera, options: FirstPersonControllerOptions)`
+- `new LookController(camera: THREE.PerspectiveCamera, options: LookControllerOptions)`
 
-### Methods
+`options.element` is required for both constructors; pass the canvas or container that should receive pointer lock and focus.
+
+### FirstPersonController methods
 
 - `update(deltaSeconds: number)`
 - `updateOptions(options: FirstPersonControllerOptions)`
 - `setMovementConfig(config: Partial<PlayerConfig>)`
 - `setLookSensitivity(value: number)`
 - `setMaxPitch(value: number)`
+- `setLookAngles(yaw: number, pitch?: number)`
 - `setSprintMultiplier(value: number)`
+- `setFieldOfView(value: number)`
 - `setPointerLockEnabled(enabled: boolean)`
 - `setAutoPointerLock(enabled: boolean)`
 - `setKeyBindings(bindings: KeyBindingsOverrides)`
 - `setPointerLockChangeCallback(callback?: (locked: boolean) => void)`
+- `setPointerLockToggleCallback(callback?: (locked: boolean) => void)`
+- `setLookChangeCallback(callback?: (yaw: number, pitch: number) => void)`
 - `setJumpCallback(callback?: () => void)`
-- `isPointerLocked(): boolean`
+- `lockPointer()`, `unlockPointer()`, `isPointerLocked()`
 - `getHeight(): number`
 - `getState(): Readonly<ControllerState>`
-- `applyToCamera(camera: THREE.PerspectiveCamera): void`
-- `requestPointerLock(): void`
-- `exitPointerLock(): void`
-- `enableCrouch(enabled: boolean): void`
-- `setCrouch(enabled: boolean): void`
+- `applyToCamera(camera: THREE.PerspectiveCamera, options?: { includePosition?: boolean })`
+- `enableCrouch(enabled: boolean)`
+- `setCrouch(enabled: boolean)`
 - `getDebugInfo()`
-- `dispose(): void`
+- `dispose()`
+
+### LookController methods (look-only)
+
+- `update()`
+- `setLookAngles(yaw: number, pitch?: number)`
+- `setLookSensitivity(value: number)`
+- `setMaxPitch(value: number)`
+- `setFieldOfView(value: number)`
+- `setPointerLockEnabled(enabled: boolean)`
+- `setAutoPointerLock(enabled: boolean)`
+- `setPointerLockChangeCallback(callback?: (locked: boolean) => void)`
+- `setPointerLockToggleCallback(callback?: (locked: boolean) => void)`
+- `setLookChangeCallback(callback?: (yaw: number, pitch: number) => void)`
+- `lockPointer()`, `unlockPointer()`, `isPointerLocked()`
+- `getAngles(): { yaw: number; pitch: number }`
+- `applyToCamera(camera: THREE.PerspectiveCamera, options?: { includePosition?: boolean })`
+- `dispose()`
 
 ### Options & callbacks
 
-All properties are optional and default to the classic behavior.
-
-- `height`, `moveSpeed`, `jumpSpeed`, `gravity`
-- `lookSensitivity`, `maxPitch`, `sprintMultiplier`
+`LookControllerOptions`:
+- `element` (required) – DOM element to focus and lock.
+- `lookSensitivity`, `maxPitch`, `fieldOfView`
 - `enablePointerLock`, `autoPointerLock`
-- `keyBindings`
-- `fieldOfView`
-- `gravityFn`, `groundCheckFn`
-- `enableCrouch`, `crouchHeight`, `crouchSpeedMultiplier`
-- `maxStepHeight`, `maxSlopeAngle`
-- `onPointerLockChange`, `onPointerLockToggle`, `onJump`
+- `onPointerLockChange`, `onPointerLockToggle`, `onLookChange`
+
+`FirstPersonControllerOptions` extend `LookControllerOptions`:
+- Movement: `height`, `moveSpeed`, `jumpSpeed`, `gravity`, `sprintMultiplier`, `initialPosition`
+- Input: `keyBindings`
+- Physics hooks: `gravityFn`, `groundCheckFn`
+- Crouch: `enableCrouch`, `crouchHeight`, `crouchSpeedMultiplier`
+- Ground/steps: `maxStepHeight`, `maxSlopeAngle`
+- Mode: `lookOnly` (skips position/velocity updates)
+- Events: `onJump`
 
 ### Exported types
 
 - `PlayerConfig`
 - `KeyBindings`, `KeyBindingsOverrides`
-- `FirstPersonControllerOptions`
+- `FirstPersonControllerOptions`, `LookControllerOptions`, `LookChangeCallback`
 - `ControllerState`
 - `GravityFn`
-- `GroundCheckFn`
+- `GroundCheckFn`, `MovementAction`
 
 ## Building & Publishing
 
