@@ -10,6 +10,28 @@ npm install three-first-person-controller three
 
 `three` is declared as a peer dependency, so ensure it is installed in your project.
 
+## Upgrade guide
+
+The 0.2 line cleans up the public API:
+
+- Constructor is now `new FirstPersonController(camera, { element, ...options })` (required `element`). The old positional `(camera, domElement, options?)` signature is removed.
+- Pointer lock helpers: use `lockPointer`/`unlockPointer`/`isPointerLocked` (aliases `requestPointerLock`/`exitPointerLock` still exist).
+- Look-only path: pass `lookOnly: true` or import `LookController` for just yaw/pitch plus pointer lock (`import { LookController } from "three-first-person-controller/look-only"`).
+- Orientation callbacks/setters: `onLookChange(yaw, pitch)` and `setLookAngles(yaw, pitch?)`.
+
+Typical migration:
+
+```diff
+- const controller = new FirstPersonController(camera, renderer.domElement, { enablePointerLock: false });
++ const controller = new FirstPersonController(camera, { element: renderer.domElement, enablePointerLock: false });
+
+// Pointer lock helpers (if needed)
+controller.lockPointer();
+controller.unlockPointer();
+```
+
+Everything else is additive; defaults preserve previous behaviour.
+
 ## Usage
 
 ```ts
